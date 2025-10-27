@@ -315,3 +315,47 @@
   font-size: 12px;
 }
 
+/* 标题折叠按钮 */
+/* 标题折叠轨道：贴紧容器左侧外部，提供右内边距以制造视觉间距 */
+.heading-collapse-rail {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  transform: translateX(-100%);
+  display: block;
+  pointer-events: none; /* 轨道不拦截事件，只有按钮可交互 */
+}
+
+.heading-collapse-button {
+  position: absolute;
+  z-index: 10000;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  color: #111827;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  user-select: none;
+  pointer-events: auto; /* 按钮可交互 */
+}
+
+.heading-collapse-button:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.heading-collapse-button:active {
+  transform: translate(-100%, -50%) scale(0.98);
+}
+
+.heading-collapse-button.is-collapsed {
+  background: #f3f4f6;
+}
+

@@ -11,10 +11,9 @@ import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 
 import "./theme/editorStyles.css";
-import SelectionBubbleMenuPlugin from "./SelectionBubbleMenuPlugin";
+import HeadingCollapsePlugin from "./plugins/HeadingCollapsePlugin";
+import SelectionBubbleMenuPlugin from "./plugins/SelectionBubbleMenuPlugin";
 import theme from "./theme/editor-theme";
-
-
 
 // 错误处理
 function onError(error: Error) {
@@ -56,6 +55,7 @@ export default function LexicalEditor() {
 				<ListPlugin />
 				<MarkdownShortcutPlugin transformers={CUSTOM_TRANSFORMERS} />
 				<SelectionBubbleMenuPlugin />
+				<HeadingCollapsePlugin />
 			</LexicalComposer>
 		</div>
 	);
