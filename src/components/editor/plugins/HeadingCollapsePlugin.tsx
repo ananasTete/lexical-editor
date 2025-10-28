@@ -1,9 +1,11 @@
 import {useLexicalComposerContext} from "@lexical/react/LexicalComposerContext";
 import {HeadingNode} from "@lexical/rich-text";
 import type { LexicalEditor } from "lexical";
-import { $getNearestNodeFromDOMNode } from "lexical";
+import { $getNearestNodeFromDOMNode, $getRoot, createCommand, type LexicalCommand } from "lexical";
+import type { MutableRefObject } from "react";
 import { useEffect, useRef, useState } from "react";
 import {createPortal} from "react-dom";
+import { $createCollapsedStateNode, $getCollapsedStateNode } from "./CollapsedStateNode";
 
 type HeadingInfo = {
   key: string;
@@ -11,6 +13,10 @@ type HeadingInfo = {
   rect: DOMRect;
   element: HTMLElement;
 };
+
+// 通过命令使折叠/展开被 History 插件记录
+export type ToggleHeadingCollapsePayload = { key: string };
+export const TOGGLE_HEADING_COLLAPSE_COMMAND: LexicalCommand<ToggleHeadingCollapsePayload> = createCommand('TOGGLE_HEADING_COLLAPSE_COMMAND');
 
 export default function HeadingCollapsePlugin() {
   const [editor] = useLexicalComposerContext();
@@ -95,10 +101,22 @@ export default function HeadingCollapsePlugin() {
     };
   }, [editor]);
 
-  // 监听编辑器更新以重应用折叠
+  // 监听编辑器更新：从编辑器状态节点读取折叠集合，并重应用
   useEffect(() => {
-    return editor.registerUpdateListener(() => {
+    return editor.registerUpdateListener(({editorState}) => {
+      editorState.read(() => {
+        const stateNode = $getCollapsedStateNode();
+        const keys = stateNode ? stateNode.getKeys() : new Set<string>();
+        collapsedHeadingKeysRef.current = keys;
+      });
       reapplyAllCollapses(editor, collapsedHeadingKeysRef.current);
+    });
+  }, [editor]);
+
+  // 注册命令：在挂载时注册一次
+  useEffect(() => {
+    return registerToggleCollapseCommand(editor, collapsedHeadingKeysRef, () => {
+      setHoverHeading((prev) => (prev ? { ...prev } : prev));
     });
   }, [editor]);
 
@@ -122,14 +140,8 @@ export default function HeadingCollapsePlugin() {
   const toggleCollapse = () => {
     const h = hoverHeading;
     if (!h) return;
-    if (collapsedHeadingKeysRef.current.has(h.key)) {
-      collapsedHeadingKeysRef.current.delete(h.key);
-    } else {
-      collapsedHeadingKeysRef.current.add(h.key);
-    }
-    reapplyAllCollapses(editor, collapsedHeadingKeysRef.current);
-    // 触发一次轻量重渲染，使图标方向立即更新
-    setHoverHeading((prev) => (prev ? { ...prev } : prev));
+    // 通过命令触发离散更新，使其纳入 History
+    editor.dispatchCommand(TOGGLE_HEADING_COLLAPSE_COMMAND, { key: h.key });
   };
 
   // 当尺寸或滚动变化时，实时更新按钮定位
@@ -281,4 +293,36 @@ function tryRestoreElements(root: HTMLElement) {
   }
 }
 
+// 将命令注册到编辑器：在首次挂载时注册一次
+// 注册命令：在编辑器状态中切换 CollapsedStateNode 的 keys
+function registerToggleCollapseCommand(
+  editor: LexicalEditor,
+  collapsedKeysRef: MutableRefObject<Set<string>>,
+  onStateChanged: () => void,
+) {
+  return editor.registerCommand(
+    TOGGLE_HEADING_COLLAPSE_COMMAND,
+    (payload) => {
+      editor.update(() => {
+        let stateNode = $getCollapsedStateNode();
+        if (!stateNode) {
+          stateNode = $createCollapsedStateNode();
+          $getRoot().append(stateNode);
+        }
+        stateNode.toggle(payload.key);
+      });
+
+      // 同步外部缓存并重新应用
+      editor.getEditorState().read(() => {
+        const stateNode = $getCollapsedStateNode();
+        const keys = stateNode ? stateNode.getKeys() : new Set<string>();
+        collapsedKeysRef.current = keys;
+      });
+      reapplyAllCollapses(editor, collapsedKeysRef.current);
+      onStateChanged();
+      return true;
+    },
+    0,
+  );
+}
 

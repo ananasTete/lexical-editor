@@ -16,6 +16,7 @@
   caret-color: #1e40af;
   border-radius: 8px;
   line-height: 1.6;
+  overflow: hidden;
 }
 
 .editor-placeholder {

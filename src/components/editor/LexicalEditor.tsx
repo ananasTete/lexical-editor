@@ -9,6 +9,7 @@ import { ListPlugin } from "@lexical/react/LexicalListPlugin";
 import { MarkdownShortcutPlugin } from "@lexical/react/LexicalMarkdownShortcutPlugin";
 import { RichTextPlugin } from "@lexical/react/LexicalRichTextPlugin";
 import { HeadingNode, QuoteNode } from "@lexical/rich-text";
+import { CollapsedStateNode } from "./plugins/CollapsedStateNode";
 
 import "./theme/editorStyles.css";
 import HeadingCollapsePlugin from "./plugins/HeadingCollapsePlugin";
@@ -37,6 +38,7 @@ const initialConfig = {
 		QuoteNode,
 		CodeNode,
 		CodeHighlightNode,
+		CollapsedStateNode,
 	],
 };
 
