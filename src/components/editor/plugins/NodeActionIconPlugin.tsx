@@ -66,7 +66,7 @@ export default function NodeActionIconPlugin() {
           let hasText = false;
           if ($isElementNode(top)) {
             const texts = top.getAllTextNodes();
-            hasText = texts.length > 0;
+            hasText = texts.some((t) => t.getTextContentSize() > 0);
           }
           if (el && rect && hasText) {
             setHoverInfo((prev) => {

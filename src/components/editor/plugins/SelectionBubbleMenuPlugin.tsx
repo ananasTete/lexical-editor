@@ -17,6 +17,7 @@ import {
 import {useLexicalComposerContext} from "@lexical/react/LexicalComposerContext";
 import { $createHeadingNode, $createQuoteNode, HeadingNode, QuoteNode } from "@lexical/rich-text";
 import { $setBlocksType } from "@lexical/selection";
+import type { LexicalNode } from "lexical";
 import {
   $createParagraphNode,
   $getSelection,
@@ -309,9 +310,28 @@ export default function SelectionBubbleMenuPlugin() {
   const onDelete = useCallback(() => {
     editor.update(() => {
       const selection = $getSelection();
-      if ($isRangeSelection(selection)) {
-        selection.removeText();
+      if (!$isRangeSelection(selection)) {
+        return;
       }
+      const nodes = selection.getNodes();
+      const seenKeys = new Set<string>();
+      const topLevelNodes: LexicalNode[] = [];
+      for (const n of nodes) {
+        const top = n.getTopLevelElementOrThrow();
+        const key = top.getKey();
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          topLevelNodes.push(top);
+        }
+      }
+      if (topLevelNodes.length === 0) {
+        const anchorTop = selection.anchor.getNode().getTopLevelElementOrThrow();
+        anchorTop.remove();
+        return;
+      }
+      topLevelNodes.forEach((el) => {
+        el.remove();
+      });
     });
   }, [editor]);
 
@@ -432,7 +452,7 @@ export default function SelectionBubbleMenuPlugin() {
         <button 
           type="button" 
           className="bubble-button" 
-          aria-label="删除选中文本"
+          aria-label="删除所选节点"
           onMouseDown={(e)=>e.preventDefault()} 
           onClick={onDelete}
         >
