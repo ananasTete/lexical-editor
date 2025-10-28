@@ -36,7 +36,7 @@ const BUBBLE_MAX_WIDTH = 360;
 const BUBBLE_PADDING = 8;
 
 type BlockType = "paragraph" | "h1" | "h2" | "h3" | "ul" | "ol" | "quote" | "code";
-type InlineFormat = "bold" | "italic" | "underline" | "strikethrough" | "code";
+type InlineFormat = "bold" | "italic" | "underline" | "strikethrough" | "code" | "subscript" | "superscript";
 
 interface FormatState {
   bold: boolean;
@@ -44,6 +44,8 @@ interface FormatState {
   underline: boolean;
   strikethrough: boolean;
   code: boolean;
+  subscript: boolean;
+  superscript: boolean;
 }
 
 export default function SelectionBubbleMenuPlugin() {
@@ -61,6 +63,8 @@ export default function SelectionBubbleMenuPlugin() {
     underline: false,
     strikethrough: false,
     code: false,
+    subscript: false,
+    superscript: false,
   });
   const [selectionRect, setSelectionRect] = useState<DOMRect | null>(null);
 
@@ -70,6 +74,12 @@ export default function SelectionBubbleMenuPlugin() {
   }, []);
 
   const syncToolbarState = useCallback((): DOMRect | null => {
+    // IME 输入法检测：输入法激活时不显示工具栏
+    if (editor.isComposing()) {
+      setSelectionRect(null);
+      return null;
+    }
+
     let rectResult: DOMRect | null = null;
     editor.getEditorState().read(() => {
       const selection = $getSelection();
@@ -105,6 +115,8 @@ export default function SelectionBubbleMenuPlugin() {
           underline: selection.hasFormat("underline"),
           strikethrough: selection.hasFormat("strikethrough"),
           code: selection.hasFormat("code"),
+          subscript: selection.hasFormat("subscript"),
+          superscript: selection.hasFormat("superscript"),
         });
       } else {
         rectResult = null;
@@ -115,6 +127,8 @@ export default function SelectionBubbleMenuPlugin() {
           underline: false,
           strikethrough: false,
           code: false,
+          subscript: false,
+          superscript: false,
         });
       }
     });
@@ -382,6 +396,26 @@ export default function SelectionBubbleMenuPlugin() {
           onClick={() => onInlineFormat("code")}
         >
           {"</>"}
+        </button>
+        <button 
+          type="button" 
+          aria-pressed={formatState.subscript} 
+          aria-label="下标"
+          className={`bubble-button${formatState.subscript ? " is-active" : ""}`} 
+          onMouseDown={(e)=>e.preventDefault()} 
+          onClick={() => onInlineFormat("subscript")}
+        >
+          X₂
+        </button>
+        <button 
+          type="button" 
+          aria-pressed={formatState.superscript} 
+          aria-label="上标"
+          className={`bubble-button${formatState.superscript ? " is-active" : ""}`} 
+          onMouseDown={(e)=>e.preventDefault()} 
+          onClick={() => onInlineFormat("superscript")}
+        >
+          X²
         </button>
       </fieldset>
       <hr className="bubble-divider" />

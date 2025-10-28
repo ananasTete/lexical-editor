@@ -144,36 +144,7 @@ export default function HeadingCollapsePlugin() {
     editor.dispatchCommand(TOGGLE_HEADING_COLLAPSE_COMMAND, { key: h.key });
   };
 
-  // 当尺寸或滚动变化时，实时更新按钮定位
-  useEffect(() => {
-    if (!hoverHeading) return;
-    const el = hoverHeading.element;
-    if (!el) return;
-
-    const update = () => {
-      const rect = el.getBoundingClientRect();
-      setHoverHeading((prev) => (prev ? { ...prev, rect } : prev));
-    };
-
-    const container = containerEl ?? editor.getRootElement();
-    const opts: AddEventListenerOptions = { passive: true };
-
-    window.addEventListener('resize', update, opts);
-    window.addEventListener('scroll', update, opts);
-    (container as HTMLElement | null)?.addEventListener?.('scroll', update, opts);
-
-    const ro = new ResizeObserver(() => update());
-    ro.observe(el);
-
-    return () => {
-      window.removeEventListener('resize', update);
-      window.removeEventListener('scroll', update);
-      (container as HTMLElement | null)?.removeEventListener?.('scroll', update);
-      ro.disconnect();
-    };
-  }, [hoverHeading, containerEl, editor]);
-
-  // UI 与定位
+  // UI 与定位（采用 DraggableBlockPlugin 的简单方式）
   if (!hoverHeading || !containerEl) return null;
 
   const containerRect = containerEl.getBoundingClientRect();
@@ -189,10 +160,11 @@ export default function HeadingCollapsePlugin() {
       aria-label={isCollapsed ? '展开标题内容' : '折叠标题内容'}
       aria-pressed={isCollapsed}
       style={{ 
-        position: 'absolute', 
-        top: `${top}px`, 
-        left: `${left - 20}px`, // 按钮宽度约 20px
-        transform: 'translateY(-50%)',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        // 使用 transform 定位，性能更好（不触发重排）
+        transform: `translate(${left - 20}px, ${top}px) translateY(-50%)`,
         zIndex: 10000
       }}
       onMouseDown={(e) => e.preventDefault()}

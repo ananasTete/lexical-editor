@@ -13,6 +13,7 @@ import { CollapsedStateNode } from "./plugins/CollapsedStateNode";
 
 import "./theme/editorStyles.css";
 import HeadingCollapsePlugin from "./plugins/HeadingCollapsePlugin";
+import NodeActionIconPlugin from "./plugins/NodeActionIconPlugin";
 import SelectionBubbleMenuPlugin from "./plugins/SelectionBubbleMenuPlugin";
 import theme from "./theme/editor-theme";
 
@@ -57,6 +58,7 @@ export default function LexicalEditor() {
 				<ListPlugin />
 				<MarkdownShortcutPlugin transformers={CUSTOM_TRANSFORMERS} />
 				<SelectionBubbleMenuPlugin />
+				<NodeActionIconPlugin />
 				<HeadingCollapsePlugin />
 			</LexicalComposer>
 		</div>
