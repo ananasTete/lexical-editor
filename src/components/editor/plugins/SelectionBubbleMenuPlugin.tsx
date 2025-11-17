@@ -377,9 +377,6 @@ export default function SelectionBubbleMenuPlugin() {
           <option value="quote">引用</option>
           <option value="code">代码块</option>
         </select>
-      </fieldset>
-      <hr className="bubble-divider" />
-      <fieldset className="bubble-group" aria-label="文本样式">
         <button
           type="button"
           aria-pressed={formatState.bold}
