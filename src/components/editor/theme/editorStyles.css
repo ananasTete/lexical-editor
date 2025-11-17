@@ -393,3 +393,15 @@
   background: #f3f4f6;
 }
 
+/* 标题 Section：用于包裹标题及其内容，支持整体折叠 */
+.heading-section {
+  position: relative;
+}
+
+.heading-section.is-collapsed > *:not(:first-child) {
+  display: none;
+}
+
+.heading-collapsed-content {
+  display: none;
+}

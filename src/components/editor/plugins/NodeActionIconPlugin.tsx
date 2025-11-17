@@ -1,7 +1,9 @@
 import {useLexicalComposerContext} from "@lexical/react/LexicalComposerContext";
 import {
+  $createNodeSelection,
   $createRangeSelection,
   $getNearestNodeFromDOMNode,
+  $getNodeByKey,
   $isElementNode,
   $setSelection,
   type LexicalEditor,
@@ -9,42 +11,73 @@ import {
 import {useCallback, useEffect, useRef, useState} from "react";
 import {createPortal} from "react-dom";
 
-type HoverInfo = {
+type OverlayInfo = {
   key: string;
-  rect: DOMRect;
   element: HTMLElement;
+  top: number;
+  left: number;
 };
 
 export default function NodeActionIconPlugin() {
   const [editor] = useLexicalComposerContext();
   const [containerEl, setContainerEl] = useState<HTMLElement | null>(null);
-  const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
+  const [overlayInfo, setOverlayInfo] = useState<OverlayInfo | null>(null);
   const highlightedElRef = useRef<HTMLElement | null>(null);
+  const rafRef = useRef<number | null>(null);
 
   // 解析容器
-  useEffect(() => {
+  const resolveContainer = useCallback(() => {
     const root = editor.getRootElement();
-    const container = (root?.closest('.editor-container') as HTMLElement | null) || (root?.parentElement ?? null);
-    setContainerEl(container);
+    if (!root) return null;
+    return (root.closest('.editor-container') as HTMLElement | null) || root.parentElement;
   }, [editor]);
+
+  useEffect(() => {
+    const container = resolveContainer();
+    setContainerEl(container);
+  }, [resolveContainer]);
+
+  const rightOffset = 12;
+
+  const computeOverlay = useCallback(
+    (key: string): OverlayInfo | null => {
+      const container = resolveContainer();
+      if (!container) return null;
+      const element = editor.getElementByKey(key) as HTMLElement | null;
+      if (!element) return null;
+
+      const containerRect = container.getBoundingClientRect();
+      const rect = element.getBoundingClientRect();
+      const top = rect.top - containerRect.top + rect.height / 2;
+      const left = containerRect.width - rightOffset;
+
+      return { key, element, top, left };
+    },
+    [editor, resolveContainer, rightOffset],
+  );
+
+  const clearRaf = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+  }, []);
 
   // 在容器级监听 pointermove，解析悬浮的顶级节点
   useEffect(() => {
     const root = editor.getRootElement();
-    const container = (root?.closest('.editor-container') as HTMLElement | null) || (root?.parentElement ?? null);
+    const container = resolveContainer();
     if (!root || !container) return;
-
-    let rafId: number | null = null;
 
     const onPointerMove = (e: PointerEvent) => {
       const target = e.target as Element | null;
       if (!target) return;
       if (target.closest('.node-action-button')) return; // 在按钮上保持当前 hover
 
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
+      clearRaf();
+      rafRef.current = requestAnimationFrame(() => {
         if (!container.contains(target)) {
-          setHoverInfo(null);
+          setOverlayInfo(null);
           return;
         }
         if (!root.contains(target)) return;
@@ -52,34 +85,28 @@ export default function NodeActionIconPlugin() {
         editor.read(() => {
           const node = $getNearestNodeFromDOMNode(target as Node);
           if (!node) {
-            setHoverInfo(null);
+            setOverlayInfo(null);
             return;
           }
-          const top = node.getTopLevelElementOrThrow();
-          const topKey = top.getKey?.();
+          const topNode = node.getTopLevelElementOrThrow();
+          const topKey = topNode.getKey?.();
           if (!topKey) {
-            setHoverInfo(null);
+            setOverlayInfo(null);
             return;
           }
-          const el = editor.getElementByKey(topKey) as HTMLElement | null;
-          const rect = el?.getBoundingClientRect() ?? null;
-          let hasText = false;
-          if ($isElementNode(top)) {
-            const texts = top.getAllTextNodes();
-            hasText = texts.some((t) => t.getTextContentSize() > 0);
-          }
-          if (el && rect && hasText) {
-            setHoverInfo((prev) => {
-              if (prev && prev.key === topKey) {
-                const sameTop = Math.abs(prev.rect.top - rect.top) < 0.5;
-                const sameHeight = Math.abs(prev.rect.height - rect.height) < 0.5;
-                if (sameTop && sameHeight) return prev;
-              }
-              return { key: topKey, rect, element: el };
-            });
+          const topElement = editor.getElementByKey(topKey) as HTMLElement | null;
+          if (!topElement || !$isElementNode(topNode)) {
+            setOverlayInfo(null);
             return;
           }
-          setHoverInfo(null);
+
+          setOverlayInfo((prev) => {
+            if (prev && prev.key === topKey) {
+              return computeOverlay(topKey) ?? null;
+            }
+            const next = computeOverlay(topKey);
+            return next;
+          });
         });
       });
     };
@@ -87,17 +114,17 @@ export default function NodeActionIconPlugin() {
     const onPointerLeave = (e: PointerEvent) => {
       const next = e.relatedTarget as Element | null;
       if (next && (container.contains(next) || next.closest('.node-action-button'))) return;
-      setHoverInfo(null);
+      setOverlayInfo(null);
     };
 
     container.addEventListener('pointermove', onPointerMove, { passive: true });
     container.addEventListener('pointerleave', onPointerLeave, { passive: true });
     return () => {
-      container.removeEventListener('pointermove', onPointerMove, { passive: true } as EventListenerOptions);
-      container.removeEventListener('pointerleave', onPointerLeave, { passive: true } as EventListenerOptions);
-      if (rafId) cancelAnimationFrame(rafId);
+      container.removeEventListener('pointermove', onPointerMove);
+      container.removeEventListener('pointerleave', onPointerLeave);
+      clearRaf();
     };
-  }, [editor]);
+  }, [editor, clearRaf, computeOverlay, resolveContainer]);
 
   const clearHighlight = useCallback(() => {
     const el = highlightedElRef.current;
@@ -111,71 +138,104 @@ export default function NodeActionIconPlugin() {
   useEffect(() => {
     return () => {
       clearHighlight();
+      clearRaf();
     };
-  }, [clearHighlight]);
+  }, [clearHighlight, clearRaf]);
 
-  const applyHighlight = useCallback((el: HTMLElement) => {
-    if (highlightedElRef.current === el) return;
-    clearHighlight();
-    el.classList.add('is-node-hovered');
-    highlightedElRef.current = el;
-  }, [clearHighlight]);
+  useEffect(() => {
+    if (!overlayInfo) {
+      clearHighlight();
+    }
+  }, [overlayInfo, clearHighlight]);
 
-  const selectNodeText = (theEditor: LexicalEditor, key: string) => {
+  const applyHighlight = useCallback(
+    (el: HTMLElement) => {
+      if (highlightedElRef.current === el) return;
+      clearHighlight();
+      el.classList.add('is-node-hovered');
+      highlightedElRef.current = el;
+    },
+    [clearHighlight],
+  );
+
+  const selectNode = useCallback((theEditor: LexicalEditor, key: string) => {
+    theEditor.focus();
     theEditor.update(() => {
-      const element = theEditor.getElementByKey(key);
-      if (!element) return;
+      const node = $getNodeByKey(key);
+      if (!node) return;
+      const top = node.getTopLevelElementOrThrow();
 
-      // 找到对应的 Lexical 节点并创建文本范围选择
-      const domNode = element as Node;
-      const lexicalNode = $getNearestNodeFromDOMNode(domNode);
-      if (!lexicalNode) return;
-      const top = lexicalNode.getTopLevelElementOrThrow();
-      
       if ($isElementNode(top)) {
-        const all = top.getAllTextNodes();
-        const start = all[0];
-        const end = all[all.length - 1];
+        const textNodes = top.getAllTextNodes();
+        const start = textNodes[0];
+        const end = textNodes[textNodes.length - 1];
         if (start && end) {
           const selection = $createRangeSelection();
           selection.setTextNodeRange(start, 0, end, end.getTextContentSize());
           $setSelection(selection);
+          return;
         }
       }
+
+      const nodeSelection = $createNodeSelection();
+      nodeSelection.add(top.getKey());
+      $setSelection(nodeSelection);
     });
-  };
+  }, []);
 
-  if (!hoverInfo || !containerEl) return null;
+  // 当容器滚动或尺寸变化时更新浮层位置
+  useEffect(() => {
+    if (!overlayInfo) return;
+    const container = resolveContainer();
+    if (!container) return;
 
-  const containerRect = containerEl.getBoundingClientRect();
-  const top = hoverInfo.rect.top - containerRect.top + hoverInfo.rect.height / 2;
-  const rightOffset = 12; // 距离容器右侧的偏移
-  const left = containerRect.width - rightOffset;
+    const updatePosition = () => {
+      setOverlayInfo((prev) => {
+        if (!prev) return null;
+        return computeOverlay(prev.key);
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(updatePosition);
+    resizeObserver.observe(container);
+    resizeObserver.observe(overlayInfo.element);
+    container.addEventListener('scroll', updatePosition, { passive: true });
+    window.addEventListener('resize', updatePosition, { passive: true });
+
+    return () => {
+      resizeObserver.disconnect();
+      container.removeEventListener('scroll', updatePosition);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [overlayInfo, computeOverlay, resolveContainer]);
+
+  if (!overlayInfo || !containerEl) return null;
 
   return createPortal(
     <button
       type="button"
       className="node-action-button"
       aria-label="选择该节点文本"
+      aria-pressed="false"
       style={{
         position: 'absolute',
         top: 0,
         left: 0,
-        transform: `translate(${left}px, ${top}px) translateY(-50%)`,
+        transform: `translate(${overlayInfo.left}px, ${overlayInfo.top}px) translateY(-50%)`,
       }}
       onMouseDown={(e) => e.preventDefault()}
-      onPointerEnter={() => applyHighlight(hoverInfo.element)}
+      onPointerEnter={() => applyHighlight(overlayInfo.element)}
       onPointerLeave={() => clearHighlight()}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           clearHighlight();
-          selectNodeText(editor, hoverInfo.key);
+          selectNode(editor, overlayInfo.key);
         }
       }}
       onClick={() => {
         clearHighlight();
-        selectNodeText(editor, hoverInfo.key);
+        selectNode(editor, overlayInfo.key);
       }}
     >
       ✎
@@ -183,5 +243,3 @@ export default function NodeActionIconPlugin() {
     containerEl,
   );
 }
-
-
